@@ -98,3 +98,24 @@ def is_frozen() -> bool:
 # 模块加载时即解析，全局复用（PyInstaller 下也只会算一次）
 FFMPEG = get_ffmpeg_binary()
 FFPROBE = get_ffprobe_binary()
+
+
+def configure_subprocess_no_window():
+    """Windows 下让所有 subprocess 调用（ffmpeg 等）不弹黑窗口。
+    monkeypatch subprocess.Popen，给没指定 creationflags 的调用补 CREATE_NO_WINDOW。
+    subprocess.run 内部也走 Popen，所以一次 patch 覆盖全部。
+    """
+    if sys.platform != "win32":
+        return
+    import subprocess
+
+    _orig_popen = subprocess.Popen
+    CREATE_NO_WINDOW = 0x08000000
+
+    class _NoWindowPopen(_orig_popen):
+        def __init__(self, *args, **kwargs):
+            if "creationflags" not in kwargs:
+                kwargs["creationflags"] = CREATE_NO_WINDOW
+            super().__init__(*args, **kwargs)
+
+    subprocess.Popen = _NoWindowPopen

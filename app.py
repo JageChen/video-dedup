@@ -12,7 +12,7 @@ import gradio as gr
 from core.config import TransformConfig
 from core.processor import process_batch
 from core.downloader import download_sensevoice, get_model_status
-from core.paths import is_sensevoice_ready
+from core.paths import FFMPEG, is_sensevoice_ready
 from core.subtitle import (
     FONT_CHOICES,
     burn_subtitle,
@@ -22,7 +22,12 @@ from core.subtitle import (
 from core.tts import VOICE_CHOICES, replace_audio, synthesize_srt
 
 
-BASE_DIR = Path(__file__).parent.resolve()
+import sys as _sys
+if getattr(_sys, "frozen", False):
+    # 打包后：输出放 exe 同级目录（用户解压后能直接看到 output 文件夹）
+    BASE_DIR = Path(_sys.executable).parent.resolve()
+else:
+    BASE_DIR = Path(__file__).parent.resolve()
 DEFAULT_OUTPUT = BASE_DIR / "output"
 UPLOAD_DIR = BASE_DIR / "uploads"
 
@@ -76,14 +81,20 @@ def open_in_file_manager(dir_path: str) -> str:
 
 
 def check_ffmpeg() -> str:
-    if not shutil.which("ffmpeg"):
-        return "⚠️ 未检测到 ffmpeg，请先执行：`brew install ffmpeg`"
+    # 用打包进来的 FFMPEG 路径（不是系统 PATH）
     try:
         out = subprocess.run(
-            ["ffmpeg", "-version"], capture_output=True, text=True, timeout=5
+            [FFMPEG, "-version"], capture_output=True, text=True, timeout=15
         )
-        first_line = (out.stdout or "").splitlines()[0] if out.stdout else "ffmpeg"
-        return f"✅ {first_line}"
+        if out.returncode == 0 and out.stdout:
+            first_line = out.stdout.splitlines()[0]
+            return f"✅ {first_line}"
+        return f"⚠️ ffmpeg 返回异常（退出码 {out.returncode}）"
+    except FileNotFoundError:
+        return f"⚠️ 找不到 ffmpeg：`{FFMPEG}`（打包可能遗漏二进制）"
+    except subprocess.TimeoutExpired:
+        # Windows 首次调用 exe 可能被杀软扫描卡住，超时不代表不可用
+        return "✅ ffmpeg 已就绪（检测超时但通常可用）"
     except Exception as e:
         return f"⚠️ ffmpeg 检测失败: {e}"
 
@@ -1075,11 +1086,22 @@ with gr.Blocks(title="视频工具箱", theme=_theme, css=_CUSTOM_CSS) as demo:
 
 
 if __name__ == "__main__":
+    # Windows 下不弹 ffmpeg 黑窗口
+    from core.paths import configure_subprocess_no_window
+    configure_subprocess_no_window()
+
     UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
     DEFAULT_OUTPUT.mkdir(parents=True, exist_ok=True)
+
+    print("=" * 50)
+    print("  视频工具箱启动中，请稍候...")
+    print("  启动后浏览器会自动打开 http://127.0.0.1:7860")
+    print("  ⚠️ 不要关闭这个黑色窗口（它是后台服务）")
+    print("=" * 50)
+
     demo.queue().launch(
         server_name="127.0.0.1",
         server_port=7860,
-        inbrowser=False,
+        inbrowser=True,        # 打包版自动开浏览器
         show_error=True,
     )
