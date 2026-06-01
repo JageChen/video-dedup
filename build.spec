@@ -15,7 +15,11 @@
 import sys
 import os
 from pathlib import Path
-from PyInstaller.utils.hooks import collect_data_files, collect_submodules
+from PyInstaller.utils.hooks import (
+    collect_data_files,
+    collect_submodules,
+    copy_metadata,
+)
 
 block_cipher = None
 PROJECT_ROOT = Path(SPECPATH).resolve()
@@ -35,12 +39,33 @@ datas = [
 # Gradio 的前端静态资源（必须，否则页面 404）
 datas += collect_data_files("gradio")
 datas += collect_data_files("gradio_client")
+
+# ⚠️ Gradio 打包头号坑：这些库 import 时会读自己的 version.txt / 包元数据，
+# PyInstaller 默认不打包，导致 FileNotFoundError 闪退。必须显式收集。
+for pkg in ["gradio", "gradio_client", "safehttpx", "groovy"]:
+    try:
+        datas += collect_data_files(pkg, include_py_files=True)
+    except Exception:
+        pass
+    try:
+        datas += copy_metadata(pkg)
+    except Exception:
+        pass
+
 # funasr 的资源
 datas += collect_data_files("funasr", include_py_files=False)
 # modelscope 资源
 datas += collect_data_files("modelscope", include_py_files=False)
 # edge-tts
 datas += collect_data_files("edge_tts")
+
+# 这些包也常因 metadata 缺失报错
+for pkg in ["torch", "torchaudio", "funasr", "modelscope", "edge_tts",
+            "huggingface_hub", "tokenizers", "numpy", "tqdm"]:
+    try:
+        datas += copy_metadata(pkg)
+    except Exception:
+        pass
 
 
 # ============== 二进制 ==============
@@ -65,9 +90,10 @@ hiddenimports = [
     "core.lut_generator",
 ]
 
-# Gradio 全套
+# Gradio 全套 + 它的隐藏依赖
 hiddenimports += collect_submodules("gradio")
 hiddenimports += collect_submodules("gradio_client")
+hiddenimports += ["safehttpx", "groovy", "ffmpy", "pydub"]
 
 # ASR / TTS — 只保留 SenseVoice 全家桶（funasr + modelscope + torch）
 # 删 faster_whisper / ctranslate2（不用 Whisper 了）
