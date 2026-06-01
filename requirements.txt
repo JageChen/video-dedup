@@ -1,0 +1,26 @@
+# Web UI
+gradio>=4.44.0
+
+# 视频处理
+ffmpeg-python>=0.2.0
+
+# ASR — SenseVoice / FunASR（阿里达摩院开源，中文场景最强）
+funasr>=1.0.0
+modelscope>=1.20.0
+
+# torch 后端（funasr 依赖）
+torch>=2.0.0
+torchaudio>=2.0.0
+
+# TTS — Microsoft Edge TTS（替换音轨用）
+edge-tts>=7.0.0
+
+# 视频指纹检测（实测算法效果用）
+videohash>=3.0.0
+
+# 音频处理
+soundfile>=0.12.0
+librosa>=0.10.0
+
+# HuggingFace 镜像支持
+huggingface-hub>=0.20.0

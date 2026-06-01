@@ -1,0 +1,47 @@
+# ========== Python ==========
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.pytest_cache/
+
+# ========== 虚拟环境 ==========
+.venv/
+venv/
+env/
+
+# ========== 大文件（千万别推上 GitHub）==========
+# 模型 ~975MB（GitHub Actions 会自己下）
+models/
+.tmp_*
+
+# 本地 ffmpeg 二进制（每平台不同，Actions 自己下）
+ffmpeg
+ffprobe
+ffmpeg.exe
+ffprobe.exe
+
+# 打包产物
+dist/
+build/
+*.spec.bak
+
+# 测试视频
+test_input/
+uploads/
+output/
+
+# ========== IDE / 系统 ==========
+.DS_Store
+.vscode/
+.idea/
+*.swp
+*.swo
+.claude/
+
+# ========== 临时 / 日志 ==========
+*.log
+*.tmp
+package_*.zip
+requirements_full.txt

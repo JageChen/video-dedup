@@ -1,0 +1,81 @@
+name: Build Windows EXE
+
+on:
+  push:
+    tags:
+      - 'v*'           # 推 tag 触发（v1.0.0 / v0.1-beta 等）
+  workflow_dispatch:    # 也可在 Actions 页面手动触发
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 90
+
+    steps:
+      # ────────── 1. 拉代码 ──────────
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ────────── 2. Python 环境 ──────────
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      # ────────── 3. 装依赖 ──────────
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      # ────────── 4. 下 ffmpeg.exe ──────────
+      - name: Download FFmpeg
+        run: |
+          Invoke-WebRequest -Uri "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip" -OutFile ffmpeg.zip
+          Expand-Archive ffmpeg.zip -DestinationPath ffmpeg_tmp
+          $bin = (Get-ChildItem ffmpeg_tmp -Recurse -Filter "ffmpeg.exe" | Select-Object -First 1).DirectoryName
+          Copy-Item "$bin\ffmpeg.exe" .
+          Copy-Item "$bin\ffprobe.exe" .
+          Remove-Item ffmpeg.zip
+          Remove-Item ffmpeg_tmp -Recurse -Force
+        shell: pwsh
+
+      # ────────── 5. 只准备 VAD 模型（SenseVoice 用户首次启动自己下） ──────────
+      - name: Prepare VAD model (4MB)
+        run: |
+          python -c "from modelscope import snapshot_download; import shutil, os; p = snapshot_download('iic/speech_fsmn_vad_zh-cn-16k-common-pytorch'); os.makedirs('models', exist_ok=True); shutil.copytree(p, 'models/fsmn-vad', dirs_exist_ok=True); print('VAD ready')"
+        shell: pwsh
+
+      # ────────── 6. PyInstaller 打包 ──────────
+      - name: Build EXE
+        run: |
+          pyinstaller build.spec --clean --noconfirm
+        shell: pwsh
+
+      # ────────── 7. 打 zip ──────────
+      - name: Compress to zip
+        run: |
+          $version = "${{ github.ref_name }}"
+          if (-not $version -or $version -eq "main") { $version = "dev" }
+          $zipName = "视频工具箱_$version_win64.zip"
+          Compress-Archive -Path "dist\视频工具箱\*" -DestinationPath $zipName
+          Write-Output "ZIP_NAME=$zipName" >> $env:GITHUB_ENV
+        shell: pwsh
+
+      # ────────── 8. 上传 artifact（可在 Actions 页面下载） ──────────
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: 视频工具箱-windows
+          path: 视频工具箱_*_win64.zip
+          retention-days: 30
+
+      # ────────── 9. （可选）推 tag 时自动发 Release ──────────
+      - name: Create Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: 视频工具箱_*_win64.zip
+          generate_release_notes: true
